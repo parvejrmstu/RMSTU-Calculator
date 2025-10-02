@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#000000" />
+    <title>RMSTU Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-black">
+    <div id="root"></div>
+    <script type="text/babel">
+      const CalculatorButton = ({ label, onClick, variant = 'number', span, disabled = false }) => {
+        const baseClasses = "flex items-center justify-center text-3xl font-medium rounded-full focus:outline-none focus:ring-2 focus:ring-gray-400 transition-all duration-200 shadow-md";
+
+        const variantClasses = {
+          operator: `bg-orange-500 hover:bg-orange-600 text-white`,
+          number: `bg-gray-800 hover:bg-gray-700 text-white`,
+          action: `bg-gray-500 hover:bg-gray-600 text-black`,
+        };
+        
+        const spanClasses = span === 'two' ? 'col-span-2' : 'aspect-square';
+
+        const disabledClasses = disabled ? 'opacity-50 cursor-not-allowed' : 'active:scale-95';
+
+        return (
+          <button
+            onClick={() => !disabled && onClick(label)}
+            className={`${baseClasses} ${variantClasses[variant]} ${spanClasses} ${disabledClasses}`}
+            disabled={disabled}
+          >
+            {label}
+          </button>
+        );
+      };
+
+      const App = () => {
+        const { useState } = React;
+
+        const [mode, setMode] = useState('reverse');
+        const [activeInput, setActiveInput] = useState('main');
+        
+        const [mainValue, setMainValue] = useState('0');
+        const [vat, setVat] = useState('0');
+        const [tax, setTax] = useState('0');
+        const [result, setResult] = useState(null);
+        const [calculatedVat, setCalculatedVat] = useState(null);
+        const [calculatedTax, setCalculatedTax] = useState(null);
+
+        const getActiveState = () => {
+          switch (activeInput) {
+            case 'main': return { value: mainValue, setter: setMainValue };
+            case 'vat': return { value: vat, setter: setVat };
+            case 'tax': return { value: tax, setter: setTax };
+          }
+        };
+
+        const clearResult = () => {
+          if (result) {
+            setResult(null);
+            setCalculatedVat(null);
+            setCalculatedTax(null);
+          }
+        };
+
+        const handleNumber = (num) => {
+          clearResult();
+          const { value, setter } = getActiveState();
+          
+          if (value.length > 12) return;
+
+          if (value === '0') {
+            setter(num);
+          } else {
+            setter(value + num);
+          }
+        };
+
+        const handleDecimal = () => {
+          clearResult();
+          const { value, setter } = getActiveState();
+          if (!value.includes('.')) {
+            setter(value + '.');
+          }
+        };
+
+        const handleClear = () => {
+          setMainValue('0');
+          setVat('0');
+          setTax('0');
+          setResult(null);
+          setCalculatedVat(null);
+          setCalculatedTax(null);
+          setActiveInput('main');
+        };
+
+        const handleToggleSign = () => {
+            clearResult();
+            const { value, setter } = getActiveState();
+            if (value !== '0') {
+                setter((prev) => (prev.startsWith('-') ? prev.slice(1) : '-' + prev));
+            }
+        };
+        
+        const handleBackspace = () => {
+            const { value, setter } = getActiveState();
+            if (result) {
+              setResult(null);
+              setCalculatedVat(null);
+              setCalculatedTax(null);
+              return;
+            }
+            if (value.length > 1) {
+                setter(value.slice(0, -1));
+            } else {
+                setter('0');
+            }
+        };
+
+        const handleCalculate = () => {
+          const mainNum = parseFloat(mainValue);
+          const vatNum = parseFloat(vat);
+          const taxNum = parseFloat(tax);
+
+          if (isNaN(mainNum) || isNaN(vatNum) || isNaN(taxNum)) {
+            setResult('Error');
+            setCalculatedVat(null);
+            setCalculatedTax(null);
+            return;
+          }
+          
+          let finalAmount;
+          let baseAmount;
+          let vatAmount;
+          let taxAmount;
+
+          if (mode === 'reverse') {
+            finalAmount = mainNum;
+            const totalRate = 1 + (vatNum / 100) + (taxNum / 100);
+            if (totalRate === 0) {
+              setResult('Error');
+              setCalculatedVat(null);
+              setCalculatedTax(null);
+              return;
+            }
+            baseAmount = finalAmount / totalRate;
+            vatAmount = baseAmount * (vatNum / 100);
+            taxAmount = baseAmount * (taxNum / 100);
+            setResult(baseAmount.toFixed(2));
+          } else { // forward
+            baseAmount = mainNum;
+            vatAmount = baseAmount * (vatNum / 100);
+            taxAmount = baseAmount * (taxNum / 100);
+            finalAmount = baseAmount + vatAmount + taxAmount;
+            setResult(finalAmount.toFixed(2));
+          }
+
+          setCalculatedVat(vatAmount.toFixed(2));
+          setCalculatedTax(taxAmount.toFixed(2));
+        };
+        
+        const handleButtonClick = (label) => {
+          if (!isNaN(parseInt(label))) {
+            handleNumber(label);
+          } else {
+            switch (label) {
+              case '.': handleDecimal(); break;
+              case 'AC': handleClear(); break;
+              case '+/-': handleToggleSign(); break;
+              case '←': handleBackspace(); break;
+              case '=': handleCalculate(); break;
+            }
+          }
+        };
+
+        const displayValue = result ?? getActiveState().value;
+        const formattedDisplay = new Intl.NumberFormat('en-US', {
+          maximumFractionDigits: 9,
+        }).format(parseFloat(displayValue.replace(/,/g, ''))) || '0';
+
+        const getInputLabel = () => mode === 'reverse' ? 'Final Amount' : 'Base Amount';
+
+        const InputField = ({ label, value, type }) => (
+          <div className="flex flex-col items-start w-full">
+            <label className="text-gray-400 text-sm">{label}</label>
+            <div 
+              onClick={() => setActiveInput(type)}
+              className={`w-full text-2xl p-2 rounded-lg transition-all duration-200 ${activeInput === type ? 'bg-gray-700 ring-2 ring-orange-500' : 'bg-gray-800'}`}
+            >
+              {value}
+            </div>
+          </div>
+        );
+
+        return (
+          <div className="bg-black text-white h-screen flex flex-col font-sans p-2 select-none">
+            <header className="flex items-center space-x-3 p-4 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" className="w-8 h-8">
+                <defs>
+                  <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#ff9500" />
+                    <stop offset="100%" stopColor="#f97316" />
+                  </linearGradient>
+                </defs>
+                <circle cx="50" cy="50" r="48" fill="url(#logoGradient)" />
+                <text x="50%" y="55%" dominantBaseline="middle" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="28" fontWeight="bold" fill="#ffffff">
+                  RMSTU
+                </text>
+              </svg>
+              <h1 className="text-2xl font-semibold text-gray-300">RMSTU Calculator</h1>
+            </header>
+
+            <main className="flex-grow flex flex-col justify-end p-4 pb-8 space-y-4">
+              <div className="text-right text-white font-light transition-all duration-200" style={{ fontSize: `${Math.max(3, 8 - formattedDisplay.length / 5)}rem` }}>
+                {formattedDisplay}
+              </div>
+
+              <div className="flex gap-2">
+                  <InputField label={getInputLabel()} value={mainValue} type="main" />
+                  <InputField label="VAT %" value={vat} type="vat" />
+                  <InputField label="TAX %" value={tax} type="tax" />
+              </div>
+              
+              {result && calculatedVat && calculatedTax && result !== 'Error' && (
+                  <div className="grid grid-cols-2 gap-2 text-center p-3 rounded-lg bg-gray-900">
+                      <div>
+                          <div className="text-xs text-gray-400">VAT Amount ({vat}%)</div>
+                          <div className="text-lg font-medium text-white">
+                              {new Intl.NumberFormat('en-US', { style: 'decimal', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(calculatedVat))}
+                          </div>
+                      </div>
+                      <div>
+                          <div className="text-xs text-gray-400">TAX Amount ({tax}%)</div>
+                          <div className="text-lg font-medium text-white">
+                              {new Intl.NumberFormat('en-US', { style: 'decimal', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(parseFloat(calculatedTax))}
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              <div className="flex gap-2 my-2">
+                <button
+                  onClick={() => setMode('reverse')}
+                  className={`w-full p-3 rounded-lg text-sm font-semibold transition-colors ${mode === 'reverse' ? 'bg-orange-500 text-white' : 'bg-gray-800 text-gray-300'}`}
+                >
+                  Reverse VAT & TAX
+                </button>
+                <button
+                  onClick={() => setMode('forward')}
+                  className={`w-full p-3 rounded-lg text-sm font-semibold transition-colors ${mode === 'forward' ? 'bg-orange-500 text-white' : 'bg-gray-800 text-gray-300'}`}
+                >
+                  Forward VAT & TAX
+                </button>
+              </div>
+
+              <div className="grid grid-cols-4 gap-3">
+                <CalculatorButton label="AC" onClick={handleButtonClick} variant="action" />
+                <CalculatorButton label="+/-" onClick={handleButtonClick} variant="action" />
+                <CalculatorButton label="←" onClick={handleButtonClick} variant="action" />
+                <CalculatorButton label="=" onClick={handleButtonClick} variant="operator" />
+
+                <CalculatorButton label="7" onClick={handleButtonClick} />
+                <CalculatorButton label="8" onClick={handleButtonClick} />
+                <CalculatorButton label="9" onClick={handleButtonClick} />
+                <CalculatorButton label="×" onClick={() => {}} variant="operator" disabled={true}/>
+
+                <CalculatorButton label="4" onClick={handleButtonClick} />
+                <CalculatorButton label="5" onClick={handleButtonClick} />
+                <CalculatorButton label="6" onClick={handleButtonClick} />
+                <CalculatorButton label="−" onClick={() => {}} variant="operator" disabled={true}/>
+
+                <CalculatorButton label="1" onClick={handleButtonClick} />
+                <CalculatorButton label="2" onClick={handleButtonClick} />
+                <CalculatorButton label="3" onClick={handleButtonClick} />
+                <CalculatorButton label="+" onClick={() => {}} variant="operator" disabled={true}/>
+                
+                <CalculatorButton label="0" onClick={handleButtonClick} span="two" />
+                <CalculatorButton label="." onClick={handleButtonClick} />
+                <CalculatorButton label="÷" onClick={() => {}} variant="operator" disabled={true}/>
+              </div>
+            </main>
+          </div>
+        );
+      };
+
+      const rootElement = document.getElementById('root');
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(
+        <React.StrictMode>
+          <App />
+        </React.StrictMode>
+      );
+    </script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => {
+              console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            })
+            .catch(error => {
+              console.log('ServiceWorker registration failed: ', error);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
